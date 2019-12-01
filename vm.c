@@ -32,15 +32,15 @@ seginit(void)
 // Return the address of the PTE in page table pgdir
 // that corresponds to virtual address va.  If alloc!=0,
 // create any required page table pages.
-static pte_t *
+pte_t *
 walkpgdir(pde_t *pgdir, const void *va, int alloc)
 {
   pde_t *pde;
   pte_t *pgtab;
 
-  pde = &pgdir[PDX(va)];
-  if(*pde & PTE_P){
-    pgtab = (pte_t*)P2V(PTE_ADDR(*pde));
+  pde = &pgdir[PDX(va)]; //pde = pgdir[가상메모리의 PDindex(/1024)], *pde = PTE
+  if(*pde & PTE_P){ //PTE주소에서 Present Flag 확인 => 존재하는 PTE면
+    pgtab = (pte_t*)P2V(PTE_ADDR(*pde)); //PTE에서 ADDR 꺼내서 P2V해주고 형변환해서 pgtab에 저장
   } else {
     if(!alloc || (pgtab = (pte_t*)kalloc()) == 0)
       return 0;
@@ -51,7 +51,17 @@ walkpgdir(pde_t *pgdir, const void *va, int alloc)
     // entries, if necessary.
     *pde = V2P(pgtab) | PTE_P | PTE_W | PTE_U;
   }
-  return &pgtab[PTX(va)];
+  // cprintf("[DEBUG] vm.c walkpgdir va: %d, PTX(va) : %d\n", va, PTX(va));
+  return &pgtab[PTX(va)]; //실제로 pgtab에서 몇번째인지 넣어서 반환 = 실주소!
+}
+
+int
+getpaddr(const void *va)
+{
+  struct proc *curproc = myproc();
+  pde_t *pgdir = curproc->pgdir;
+  // cprintf("%p, %p\n", (PTE_ADDR(walkpgdir(pgdir, va, 0))), POX(va));
+  return (int)((PTE_ADDR(*(walkpgdir(pgdir, va, 0)))) | POX(va));
 }
 
 // Create PTEs for virtual addresses starting at va that refer to
@@ -344,6 +354,42 @@ bad:
   return 0;
 }
 
+pde_t*
+vcopyuvm(pde_t *pgdir, uint sz)
+{
+  pde_t *d;
+  pte_t *pte;
+  uint i, pa, flags;
+  // char *mem;
+
+  if((d = setupkvm()) == 0)
+    return 0;
+
+  //pgdir복사
+  // memmove(d, (char*)pgdir, sz);
+
+  for(i = 0; i < sz; i += PGSIZE){
+    
+    if((pte = walkpgdir(pgdir, (void *) i, 0)) == 0)
+      panic("vcopyuvm: pte should exist");
+    if(!(*pte & PTE_P))
+      panic("vcopyuvm: page not present");
+    *pte &= ~PTE_W; //writeable flag 없애기
+    pa = PTE_ADDR(*pte);
+    flags = PTE_FLAGS(*pte);
+    if(mappages(d, (void*)i, PGSIZE, pa, flags) < 0) //원래mem이랑 연동
+      goto bad;
+    refcntUp(pa);
+  }
+  lcr3(V2P(pgdir));
+  return d;
+
+bad:
+  freevm(d);
+  lcr3(V2P(pgdir));
+  return 0;
+}
+
 //PAGEBREAK!
 // Map user virtual address to kernel address.
 char*
@@ -384,7 +430,7 @@ copyout(pde_t *pgdir, uint va, void *p, uint len)
   }
   return 0;
 }
-
+    
 //PAGEBREAK!
 // Blank page.
 //PAGEBREAK!

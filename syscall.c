@@ -103,6 +103,8 @@ extern int sys_unlink(void);
 extern int sys_wait(void);
 extern int sys_write(void);
 extern int sys_uptime(void);
+extern int sys_vfork(void);
+extern int sys_getpaddr(void);
 
 static int (*syscalls[])(void) = {
 [SYS_fork]    sys_fork,
@@ -126,16 +128,47 @@ static int (*syscalls[])(void) = {
 [SYS_link]    sys_link,
 [SYS_mkdir]   sys_mkdir,
 [SYS_close]   sys_close,
+[SYS_vfork]   sys_vfork,
+[SYS_getpaddr] sys_getpaddr,
+
 };
+
+// static char* syscallNames[30] = {
+// "sys_fork", //0
+// "sys_exit",
+// "sys_wait",
+// "sys_pipe",
+// "sys_read",
+// "sys_kill",//5
+// "sys_exec",
+// "sys_fstat",
+// "sys_chdir",
+// "sys_dup",
+// "sys_getpid", //10
+// "sys_sbrk",
+// "sys_sleep",
+// "sys_uptime",
+// "sys_open",
+// "sys_write",//15
+// "sys_mknod",
+// "sys_unlink",
+// "sys_link",
+// "sys_mkdir",
+// "sys_close",//20
+// "sys_vfork",
+// "sys_getpaddr"
+// };
 
 void
 syscall(void)
 {
   int num;
   struct proc *curproc = myproc();
-
+  
   num = curproc->tf->eax;
   if(num > 0 && num < NELEM(syscalls) && syscalls[num]) {
+    // if(num != 16)
+      // cprintf("[DEBUG] syscall.c syscall %d %s\n", num, syscallNames[num-1]);
     curproc->tf->eax = syscalls[num]();
   } else {
     cprintf("%d %s: unknown sys call %d\n",

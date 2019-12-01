@@ -181,42 +181,93 @@ int
 fork(void)
 {
   int i, pid;
-  struct proc *np;
+  struct proc *np; //자식프로세스 구조체 선언
   struct proc *curproc = myproc();
 
   // Allocate process.
-  if((np = allocproc()) == 0){
+  if((np = allocproc()) == 0){ //자식프로세스 할당
     return -1;
   }
 
   // Copy process state from proc.
-  if((np->pgdir = copyuvm(curproc->pgdir, curproc->sz)) == 0){
+  if((np->pgdir = copyuvm(curproc->pgdir, curproc->sz)) == 0){ //자식 구조체에 부모 구조체 내용 복사?
     kfree(np->kstack);
     np->kstack = 0;
     np->state = UNUSED;
     return -1;
   }
-  np->sz = curproc->sz;
-  np->parent = curproc;
-  *np->tf = *curproc->tf;
+  np->sz = curproc->sz; //자식의 sz를 부모의 sz로 복사
+  np->parent = curproc; //자식의 부모 설정
+  *np->tf = *curproc->tf; // 자식의 trapframe(레지스터등) 복사
 
   // Clear %eax so that fork returns 0 in the child.
   np->tf->eax = 0;
 
   for(i = 0; i < NOFILE; i++)
     if(curproc->ofile[i])
-      np->ofile[i] = filedup(curproc->ofile[i]);
-  np->cwd = idup(curproc->cwd);
+      np->ofile[i] = filedup(curproc->ofile[i]); //부모 열린 파일목록 복사
+  np->cwd = idup(curproc->cwd); //부모의 디렉토리 정보 복사
 
-  safestrcpy(np->name, curproc->name, sizeof(curproc->name));
+  safestrcpy(np->name, curproc->name, sizeof(curproc->name)); //부모 프로세스 이름복사
 
-  pid = np->pid;
+  pid = np->pid; //자식 pid를 부모에게 달
 
-  acquire(&ptable.lock);
+  acquire(&ptable.lock); //락
 
-  np->state = RUNNABLE;
+  np->state = RUNNABLE; //자식 프로세스 활성화
 
-  release(&ptable.lock);
+  release(&ptable.lock); //락해제
+
+  return pid;
+}
+
+
+// Create a new process copying p as the parent.
+// Sets up stack to return as if from system call.
+// Caller must set state of returned proc to RUNNABLE.
+// Implement vfork from fork.
+int
+vfork(void)
+{
+  // cprintf("[DEBUG] proc.c vfork start\n");
+  // return 0;
+  int i, pid;
+  struct proc *np; //자식프로세스 구조체 선언
+  struct proc *curproc = myproc();
+
+  // Allocate process.
+  if((np = allocproc()) == 0){ //자식프로세스 할당
+    return -1;
+  }
+
+  // Copy process state from proc.
+  if((np->pgdir = vcopyuvm(curproc->pgdir, curproc->sz)) == 0){ //자식 구조체에 부모 구조체 내용 복사?
+    kfree(np->kstack);
+    np->kstack = 0;
+    np->state = UNUSED;
+    return -1;
+  }
+  np->sz = curproc->sz; //자식의 sz를 부모의 sz로 복사
+  np->parent = curproc; //자식의 부모 설정
+  *np->tf = *curproc->tf; // 자식의 trapframe(레지스터등) 복사
+
+  // Clear %eax so that fork returns 0 in the child.
+  np->tf->eax = 0;
+
+  for(i = 0; i < NOFILE; i++)
+    if(curproc->ofile[i])
+      np->ofile[i] = filedup(curproc->ofile[i]); //부모 열린 파일목록 복사
+  np->cwd = idup(curproc->cwd); //부모의 디렉토리 정보 복사
+
+  safestrcpy(np->name, curproc->name, sizeof(curproc->name)); //부모 프로세스 이름복사
+
+  pid = np->pid; //자식 pid를 부모에게 달
+
+  acquire(&ptable.lock); //락
+
+  np->state = RUNNABLE; //자식 프로세스 활성화
+
+  release(&ptable.lock); //락해제
 
   return pid;
 }
@@ -367,7 +418,7 @@ sched(void)
 {
   int intena;
   struct proc *p = myproc();
-
+  
   if(!holding(&ptable.lock))
     panic("sched ptable.lock");
   if(mycpu()->ncli != 1)

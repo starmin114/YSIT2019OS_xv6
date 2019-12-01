@@ -7,9 +7,29 @@
 #include "mmu.h"
 #include "proc.h"
 
+
+
+//Implementation of vfork
+int
+sys_vfork(void)
+{
+  return vfork();
+}
+
+int
+sys_getpaddr(void)
+{
+
+  const void* va;
+
+  argptr(0, (void*)&va, sizeof(*va));
+  return getpaddr(va);
+}
+
 int
 sys_fork(void)
 {
+  // cprintf("[DEBUG] sysproc.c sys_fork\n")
   return fork();
 }
 

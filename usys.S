@@ -8,6 +8,9 @@
     int $T_SYSCALL; \
     ret
 
+SYSCALL(vfork)
+SYSCALL(getpaddr)
+
 SYSCALL(fork)
 SYSCALL(exit)
 SYSCALL(wait)

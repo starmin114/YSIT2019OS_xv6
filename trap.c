@@ -47,6 +47,46 @@ trap(struct trapframe *tf)
   }
 
   switch(tf->trapno){
+    case T_PGFLT :
+    {
+    uint va = rcr2();
+
+    pte_t *pte;
+    struct proc *curproc = myproc();
+    pte = walkpgdir(curproc->pgdir, (void*)va, 0);
+
+    if(*pte & PTE_W){ // writeable한 상태에서 일어나는 오류들은 다루지 않음.
+      panic("Error not handling");
+    }
+
+    uint pa = PTE_ADDR(*pte), refCount = refcntGet(pa);
+    char *mem;
+
+    if(refCount == 1){
+      *pte |= PTE_W;
+    }else if(refCount > 1) {
+        if((mem = kalloc()) == 0) {
+          cprintf("trap.c kalloc fail");
+          curproc->killed = 1;
+          return;
+        }
+        // 메모리 복사
+        memmove(mem, (char*)P2V(pa), PGSIZE);
+        // pte 이동
+        *pte = V2P(mem) | PTE_P | PTE_U | PTE_W;
+
+        refcntDn(pa);
+    }
+    else{
+      panic("refcnt Err\n");
+    }
+
+    lcr3(V2P(curproc->pgdir)); //TLB Flush
+    break;
+    }
+
+
+
   case T_IRQ0 + IRQ_TIMER:
     if(cpuid() == 0){
       acquire(&tickslock);
