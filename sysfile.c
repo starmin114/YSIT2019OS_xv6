@@ -319,14 +319,52 @@ sys_open(void)
     end_op();
     return -1;
   }
-  iunlock(ip);
-  end_op();
+
+  //SymLink처리 & ls제외
+  if(ip->type == T_SLNK && strncmp(myproc()->name, "ls",2)) {
+    f->type = FD_INODE;
+    f->ip = ip;
+    f->off = 0;
+    f->readable = 1;
+    f->writable = 0;
+    iunlock(ip);
+
+    struct stat st;
+    filestat(f, &st); //파일 사이즈 (= path 길이) 가져오기 위함.
+    char newpath[st.size];
+    fileread(f, newpath, st.size);
+    newpath[st.size] = '\0'; //읽어온 데이터 끝에 null을 넣어야 정상적으로 parsing됨.
+
+    // fileclose(f);
+
+    if((ip = namei(newpath)) == 0){
+      end_op();
+      return -1;
+    }
+    ilock(ip);
+    if(ip->type == T_DIR && omode != O_RDONLY){
+      iunlockput(ip);
+      end_op();
+      return -1;
+    }
+
+    if((f = filealloc()) == 0 || (fd = fdalloc(f)) < 0){
+      if(f)
+        fileclose(f);
+      iunlockput(ip);
+      end_op();
+      return -1;
+    }
+  }
 
   f->type = FD_INODE;
   f->ip = ip;
   f->off = 0;
   f->readable = !(omode & O_WRONLY);
   f->writable = (omode & O_WRONLY) || (omode & O_RDWR);
+
+  iunlock(ip);
+  end_op();
   return fd;
 }
 
@@ -414,7 +452,42 @@ sys_exec(void)
     if(fetchstr(uarg, &argv[i]) < 0)
       return -1;
   }
-  return exec(path, argv);
+
+  //symlink catch
+  struct inode *ip;
+  if((ip = namei(path)) == 0){
+    end_op();
+    return -1;
+  }
+  ilock(ip);
+  if(ip -> type == T_SLNK){
+    struct file *f;
+    int fd;
+    if((f = filealloc()) == 0 || (fd = fdalloc(f)) < 0){
+      if(f)
+        fileclose(f);
+      iunlockput(ip);
+      end_op();
+      return -1;
+    }
+    f->type = FD_INODE;
+    f->ip = ip;
+    f->off = 0;
+    f->readable = 1;
+    f->writable = 0;
+    iunlock(ip);
+
+    struct stat st;
+    filestat(f, &st); //파일 사이즈 (= path 길이) 가져오기 위함.
+    char newpath[st.size];
+    fileread(f, newpath, st.size);
+    newpath[st.size] = '\0'; //읽어온 데이터 끝에 null을 넣어야 정상적으로 parsing됨.
+    cprintf("[DEBUG] sys_exec typeCheck SLNK %s, %s\n",path, newpath);
+    return exec(newpath, argv);
+  }else{
+    iunlock(ip);
+    return exec(path, argv);
+  }
 }
 
 int
@@ -440,3 +513,58 @@ sys_pipe(void)
   fd[1] = fd1;
   return 0;
 }
+
+// symlink(<>link)
+int
+sys_slink(void)
+{
+  struct file *f;
+  char *new, *old;
+  int fd;
+  struct inode *ip;
+
+  if(argstr(0, &old) < 0 || argstr(1, &new) < 0)
+    return -1;
+
+  begin_op();
+
+  //새로운 inode 생성
+  if((ip = create(new, T_SLNK, 0, 0)) == 0){
+    end_op();
+    return -1;
+  }
+
+  //file에다가 target link를 write하기 위해 filePointer 선언
+  if((f = filealloc()) == 0 || (fd = fdalloc(f)) < 0){
+    if(f)
+      fileclose(f);
+    iunlockput(ip);
+    end_op();
+    return -1;
+  }
+  
+  iunlock(ip);
+
+  end_op();
+
+  //기본 file정보기입
+  f->type = FD_INODE;
+  f->ip = ip;
+  f->off = 0;
+  f->readable = 1;
+  //file에다가 링크기입
+  filewrite(f, old, strlen(old));
+
+  //다 적은 후 type및 writeable tag 수정
+
+
+  //이거 해줘야만 file이 안날라간다...
+  //왜인지 모르겠는데 아마 FD_INODE만의 처리가있어서 그런거같다.
+  f->type = FD_SLNK; 
+  f->writable = 0;
+  // myproc()->ofile[fd] = 0;
+  // fileclose(f);
+
+  return 0;
+}
+
