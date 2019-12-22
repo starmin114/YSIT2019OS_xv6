@@ -1745,59 +1745,120 @@ rand()
   return randstate;
 }
 
+
+int
+fsIndirectTest()
+{
+  // bigwrite();
+  int fd, sz;
+  
+  printf(1, "fsIndirect test\n");
+
+  unlink("fsIndirect");
+
+  fd = open("fsIndirect.txt", O_CREATE | O_RDWR);
+  if(fd < 0){
+    printf(1, "cannot create fsIndirect\n");
+    exit();
+  }
+
+  char* temp[BSIZE];
+
+  //DIRECT
+  printf(1, "[TEST] fsIndirect : DIRECT TEST\n");
+  for(sz = 0; sz < NDIRECT; sz += 1){
+    int cc = write(fd, temp, BSIZE);
+    if(cc != BSIZE){
+      printf(1, "DIRECT write(%d) ret %d\n", sz, cc);
+      close(fd);
+      exit();
+    }
+  }
+  sz-=NDIRECT;
+
+  //SDIRECT
+  printf(1, "[TEST] fsIndirect : sDIRECT TEST\n");
+  for(sz = 0; sz < NINDIRECT; sz += 1){
+    int cc = write(fd, temp, BSIZE);
+    if(cc != BSIZE){
+      printf(1, "sDIRECT write(%d) ret %d\n", sz, cc);
+      close(fd);
+      exit();
+    }
+  }
+  sz -= NINDIRECT;
+
+  //DDIRECT
+  printf(1, "[TEST] fsIndirect : dDIRECT TEST\n");
+  for(sz = 0; sz < NDINDIRECT; sz += 1){
+    int cc = write(fd, temp, BSIZE);
+    if(cc != BSIZE){
+      printf(1, "dDIRECT write(%d) ret %d\n", sz, cc);
+      close(fd);
+      exit();
+    }
+  }
+
+  close(fd);
+  unlink("fsIndirect");
+
+  printf(1, "fsIndirect ok\n");
+  return 0;
+}
+
 int
 main(int argc, char *argv[])
 {
   printf(1, "usertests starting\n");
+  fsIndirectTest();
+  // if(open("usertests.ran", 0) >= 0){
+  //   printf(1, "already ran user tests -- rebuild fs.img\n");
+  //   exit();
+  // }
+  // close(open("usertests.ran", O_CREATE));
 
-  if(open("usertests.ran", 0) >= 0){
-    printf(1, "already ran user tests -- rebuild fs.img\n");
-    exit();
-  }
-  close(open("usertests.ran", O_CREATE));
+  // argptest();
+  // createdelete();
+  // linkunlink();
+  // concreate();
+  // fourfiles();
+  // sharedfd();
 
-  argptest();
-  createdelete();
-  linkunlink();
-  concreate();
-  fourfiles();
-  sharedfd();
+  // bigargtest();
+  // bigwrite();
+  // bigargtest();
+  // bsstest();
+  // sbrktest();
+  // validatetest();
 
-  bigargtest();
-  bigwrite();
-  bigargtest();
-  bsstest();
-  sbrktest();
-  validatetest();
+  // opentest();
+  // writetest();
+  // writetest1();
+  // createtest();
 
-  opentest();
-  writetest();
-  writetest1();
-  createtest();
+  // openiputtest();
+  // exitiputtest();
+  // iputtest();
 
-  openiputtest();
-  exitiputtest();
-  iputtest();
+  // mem();
+  // pipe1();
+  // preempt();
+  // exitwait();
 
-  mem();
-  pipe1();
-  preempt();
-  exitwait();
+  // rmdot();
+  // fourteen();
+  // bigfile();
+  // subdir();
+  // linktest();
+  // unlinkread();
+  // dirfile();
+  // iref();
+  // forktest();
+  // bigdir(); // slow
 
-  rmdot();
-  fourteen();
-  bigfile();
-  subdir();
-  linktest();
-  unlinkread();
-  dirfile();
-  iref();
-  forktest();
-  bigdir(); // slow
+  // uio();
 
-  uio();
-
-  exectest();
+  // exectest();
 
   exit();
 }

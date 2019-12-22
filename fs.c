@@ -372,16 +372,20 @@ iunlockput(struct inode *ip)
 static uint
 bmap(struct inode *ip, uint bn)
 {
-  uint addr, *a;
-  struct buf *bp;
+  uint addr, *a, *b;
+  struct buf *bp, *bbp;
 
-  if(bn < NDIRECT){
-    if((addr = ip->addrs[bn]) == 0)
-      ip->addrs[bn] = addr = balloc(ip->dev);
+  // Direct경우
+  // cprintf("[DEBUG] fs.c bmap 1 bn : %d\n",bn);
+  if(bn < NDIRECT){ 
+    if((addr = ip->addrs[bn]) == 0) // addr (=ip->~)이 0일경우 (allocation)
+      ip->addrs[bn] = addr = balloc(ip->dev); // addr (= balloc ~)을 ip->~에 대입.
     return addr;
   }
   bn -= NDIRECT;
 
+  // sInDirect경우
+  // cprintf("[DEBUG] fs.c bmap 2 bn : %d\n",bn);
   if(bn < NINDIRECT){
     // Load indirect block, allocating if necessary.
     if((addr = ip->addrs[NDIRECT]) == 0)
@@ -395,6 +399,39 @@ bmap(struct inode *ip, uint bn)
     brelse(bp);
     return addr;
   }
+  bn -= NINDIRECT;
+
+  //dInDirect경우
+  
+  if(bn < NDINDIRECT){
+    // Load dindirect block, allocating if necessary.
+    if((addr = ip->addrs[NINDIRECT]) == 0)
+      ip->addrs[NINDIRECT] = addr = balloc(ip->dev);
+
+    bp = bread(ip->dev, addr);
+    a = (uint*)bp->data;
+    uint sIndex = bn / NINDIRECT;
+    uint dIndex = bn % NINDIRECT;
+    cprintf("[DEBUG] fs.c bmap dInDirect %d = %d , %d\n", bn, sIndex, dIndex);
+
+    if((addr = a[sIndex]) == 0){
+      a[sIndex] = addr = balloc(ip->dev);
+      log_write(bp);
+    }
+    brelse(bp);
+
+    bbp = bread(ip->dev, addr);
+    b = (uint*)bbp->data;
+    // cprintf("[DEBUG] fs.c bmap dIndex bn : %d\n",bn);
+    if((addr = b[dIndex]) == 0){
+      b[dIndex] = addr = balloc(ip->dev);
+      log_write(bbp);
+    }
+    // cprintf("[DEBUG] fs.c bmap end bn : %d\n",bn);
+    brelse(bbp);
+    return addr;
+  }
+
 
   panic("bmap: out of range");
 }
